@@ -1,5 +1,5 @@
 /*
- *	@date   : 2017/09/23 
+ *	@date   : 2017/10/03 
  *	@author : rrrfff@foxmail.com
  *  https://github.com/rrrfff/And64InlineHook
  */
@@ -36,6 +36,11 @@
 #define  A64_NOP              0xd503201fu
 #define  A64_JNIEXPORT        __attribute__((visibility("default")))
 #define	 A64_LOGE(...)        ((void)__android_log_print(ANDROID_LOG_ERROR, "A64_HOOK", __VA_ARGS__))
+#ifndef	NDEBUG
+# define A64_LOGI(...)        ((void)__android_log_print(ANDROID_LOG_INFO, "A64_HOOK", __VA_ARGS__))
+#else
+# define A64_LOGI(...)        ((void)0)
+#endif // NDEBUG
 typedef uint32_t *__restrict *__restrict instruction;
 
 //-------------------------------------------------------------------------
@@ -439,8 +444,8 @@ static void __fix_instructions(uint32_t *__restrict inp, int32_t count, uint32_t
 //-------------------------------------------------------------------------
 
 extern "C" {
-	#define __attribute                 __attribute__
-	#define aligned(x)                  __aligned__(x)
+	#define __attribute                __attribute__
+	#define aligned(x)                 __aligned__(x)
 	#define __intval(p)                reinterpret_cast<intptr_t>(p)
 	#define __uintval(p)               reinterpret_cast<uintptr_t>(p)
 	#define __ptr(p)                   reinterpret_cast<void *>(p)
@@ -453,7 +458,6 @@ extern "C" {
 	#define __atomic_increase(p)       __sync_add_and_fetch(p, 1)
 	#define __atomic_cmpswap(p, v, n)  __sync_val_compare_and_swap(p, v, n)
 	#define	__predict_true(exp)		   __builtin_expect((exp) != 0, 1)
-	#define	__predict_false(exp)	   __builtin_expect((exp) != 0, 0)
 	#define __flush_cache(c, n)        __builtin___clear_cache(reinterpret_cast<char *>(c), reinterpret_cast<char *>(c) + n)
 	#define __make_rwx(p, n)           ::mprotect(__ptr_align(p), \
 												  __page_align(__uintval(p) + n) != __page_align(__uintval(p)) ? __page_align(n) + __page_size : __page_align(n), \
@@ -461,28 +465,26 @@ extern "C" {
 	
 	//-------------------------------------------------------------------------
 	
+	static __attribute((aligned(__page_size))) uint32_t __insns_pool[64][A64_MAX_INSTRUCTIONS * 10];
+
+	//-------------------------------------------------------------------------
+	
+	A64_JNIEXPORT void A64HookInit(intptr_t unused)
+	{
+		__make_rwx(__insns_pool, sizeof(__insns_pool));
+		A64_LOGI("insns pool initialized.");
+	}
+
+	//-------------------------------------------------------------------------
+	
 	static uint32_t *FastAllocateTrampoline()
 	{
-		static_assert((A64_MAX_INSTRUCTIONS * 10 * sizeof(uint32_t)) % 8 == 0, "8-byte align");
-		static __attribute((aligned(__page_size))) uint32_t __insns_pool[64][A64_MAX_INSTRUCTIONS * 10];
-
-		static volatile int32_t __index = -2;
-		while (__index == -1) { 
-			// spinning... 
-		}
+		static_assert((A64_MAX_INSTRUCTIONS * 10 * sizeof(uint32_t)) % 8 == 0, "8-byte align");	
+		static volatile int32_t __index = -1;
 
 		int_fast32_t i = __atomic_increase(&__index);
 		if (__predict_true(i >= 0 && i < __countof(__insns_pool))) {
 			return __insns_pool[i];
-		} //if
-
-		if (i == -2) {
-			__make_rwx(__insns_pool, sizeof(__insns_pool));
-			if ((i = __atomic_increase(&__index)) != 0) {
-				A64_LOGE("fatal error! unexpected i = %ld", i);
-			} else {
-				return __insns_pool[0];
-			} //if
 		} //if
 
 		A64_LOGE("failed to allocate trampoline!");

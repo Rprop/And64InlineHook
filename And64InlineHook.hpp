@@ -1,5 +1,5 @@
 /*
- *	@date   : 2017/09/23 
+ *	@date   : 2017/10/03 
  *	@author : rrrfff@foxmail.com
  *  https://github.com/rrrfff/And64InlineHook
  */
@@ -32,6 +32,7 @@
 extern "C" {
 #endif
 
+	void A64HookInit(intptr_t unused); 
 	void A64HookFunction(void *const symbol, void *const replace, void **result);
 
 #ifdef __cplusplus
