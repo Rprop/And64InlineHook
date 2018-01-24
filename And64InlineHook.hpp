@@ -1,5 +1,5 @@
 /*
- *	@date   : 2017/10/03 
+ *	@date   : 2018/01/24 
  *	@author : rrrfff@foxmail.com
  *  https://github.com/rrrfff/And64InlineHook
  */
@@ -27,13 +27,15 @@
  SOFTWARE.
  */
 #pragma once
+#define A64_MAX_BACKUPS 256
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-	void A64HookInit(intptr_t unused); 
-	void A64HookFunction(void *const symbol, void *const replace, void **result);
+    void A64HookFunction(void *const symbol, void *const replace, void **result);
+    void *A64HookFunctionV(void *const symbol, void *const replace,
+                           void *const rwx, const uintptr_t rwx_size);
 
 #ifdef __cplusplus
 }
