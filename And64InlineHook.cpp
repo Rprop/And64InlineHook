@@ -1,5 +1,5 @@
 /*
- *	@date   : 2018/01/24
+ *	@date   : 2018/04/06
  *	@author : rrrfff@foxmail.com
  *  https://github.com/rrrfff/And64InlineHook
  */
@@ -124,10 +124,10 @@ static bool __fix_branch_imm(instruction inpp, instruction outpp, context *ctxp)
 			int64_t new_pc_offset = static_cast<int64_t>(absolute_addr - reinterpret_cast<int64_t>(*outpp)) >> 2; // shifted		
 			bool special_fix_type = ctxp->is_in_fixing_range(absolute_addr);
 			// whether the branch should be converted to absolute jump
-			if (!special_fix_type && llabs(new_pc_offset) > rmask) {
+			if (!special_fix_type && llabs(new_pc_offset) >= (rmask >> 1)) {
 				bool b_aligned = (reinterpret_cast<uint64_t>(*outpp + 2) & 7u) == 0u;
 				if (opc == op_b) {
-					if (b_aligned == true) {
+					if (b_aligned != true) {
 						(*outpp)[0] = A64_NOP;
 						ctxp->reset_current_ins(current_idx, ++(*outpp));
 					} //if
@@ -136,7 +136,7 @@ static bool __fix_branch_imm(instruction inpp, instruction outpp, context *ctxp)
 					memcpy(*outpp + 2, &absolute_addr, sizeof(absolute_addr));
 					*outpp += 4;
 				} else {
-					if (b_aligned == false) {
+					if (b_aligned == true) {
 						(*outpp)[0] = A64_NOP;
 						ctxp->reset_current_ins(current_idx, ++(*outpp));
 					} //if
@@ -201,7 +201,7 @@ static bool __fix_cond_comp_test_branch(instruction inpp, instruction outpp, con
 	int64_t absolute_addr = reinterpret_cast<int64_t>(*inpp) + ((ins & ~lmask) >> (lsb - 2u));
 	int64_t new_pc_offset = static_cast<int64_t>(absolute_addr - reinterpret_cast<int64_t>(*outpp)) >> 2; // shifted
 	bool special_fix_type = ctxp->is_in_fixing_range(absolute_addr);
-	if (!special_fix_type && llabs(new_pc_offset) > (~lmask >> lsb)) {
+	if (!special_fix_type && llabs(new_pc_offset) >= (~lmask >> (lsb + 1))) {
 		if ((reinterpret_cast<uint64_t>(*outpp + 4) & 7u) != 0u) {
 			(*outpp)[0] = A64_NOP;
 			ctxp->reset_current_ins(current_idx, ++(*outpp));
@@ -281,7 +281,7 @@ static bool __fix_loadlit(instruction inpp, instruction outpp, context *ctxp)
 	int64_t new_pc_offset = static_cast<int64_t>(absolute_addr - reinterpret_cast<int64_t>(*outpp)) >> 2; // shifted
 	bool special_fix_type = ctxp->is_in_fixing_range(absolute_addr);
 	// special_fix_type may encounter issue when there are mixed data and code
-	if (special_fix_type || (llabs(new_pc_offset) + (faligned + 1u - 4u)) > (~lmask >> lsb)) {
+	if (special_fix_type || (llabs(new_pc_offset) + (faligned + 1u - 4u)) > (~lmask >> (lsb + 1))) {
 		while ((reinterpret_cast<uint64_t>(*outpp + 2) & faligned) != 0u) {
 			*(*outpp)++ = A64_NOP;
 		}
@@ -336,7 +336,7 @@ static bool __fix_pcreladdr(instruction inpp, instruction outpp, context *ctxp)
 			int64_t absolute_addr = reinterpret_cast<int64_t>(*inpp) + (((static_cast<int32_t>(ins << msb) >> (msb + lsb - 2u)) & ~3u) | lsb_bytes);
 			int64_t new_pc_offset = static_cast<int64_t>(absolute_addr - reinterpret_cast<int64_t>(*outpp));
 			bool special_fix_type = ctxp->is_in_fixing_range(absolute_addr);
-			if (!special_fix_type && llabs(new_pc_offset) > max_val) {
+			if (!special_fix_type && llabs(new_pc_offset) >= (max_val >> 1)) {
 				if ((reinterpret_cast<uint64_t>(*outpp + 2) & 7u) != 0u) {
 					(*outpp)[0] = A64_NOP;
 					ctxp->reset_current_ins(current_idx, ++(*outpp));
@@ -433,7 +433,7 @@ static void __fix_instructions(uint32_t *__restrict inp, int32_t count, uint32_t
 	constexpr uint_fast64_t mask = 0x03ffffffu; // 0b00000011111111111111111111111111
 	auto callback  = reinterpret_cast<int64_t>(inp);
 	auto pc_offset = static_cast<int64_t>(callback - reinterpret_cast<int64_t>(outp)) >> 2;
-	if (llabs(pc_offset) > mask) {
+	if (llabs(pc_offset) >= (mask >> 1)) {
 		if ((reinterpret_cast<uint64_t>(outp + 2) & 7u) != 0u) {
 			outp[0] = A64_NOP;
 			++outp;
@@ -514,7 +514,7 @@ extern "C" {
 
         static_assert(A64_MAX_INSTRUCTIONS >= 5, "please fix A64_MAX_INSTRUCTIONS!");
         auto pc_offset = static_cast<int64_t>(__intval(replace) - __intval(symbol)) >> 2;
-        if (llabs(pc_offset) > mask) {
+        if (llabs(pc_offset) >= (mask >>1)) {
             int32_t count = (reinterpret_cast<uint64_t>(original + 2) & 7u) != 0u ? 5 : 4;
             if (trampoline) {
                 if (rwx_size < count * 10u) {
