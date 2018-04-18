@@ -1,12 +1,12 @@
 /*
- *	@date   : 2018/04/06 
- *	@author : rrrfff@foxmail.com
- *  https://github.com/rrrfff/And64InlineHook
+ *  @date   : 2018/04/18
+ *  @author : Rprop (r_prop@outlook.com)
+ *  https://github.com/Rprop/And64InlineHook
  */
 /*
  MIT License
 
- Copyright (c) 2017 rrrfff@foxmail.com 
+ Copyright (c) 2018 Rprop (r_prop@outlook.com)
 
  Permission is hereby granted, free of charge, to any person obtaining a copy
  of this software and associated documentation files (the "Software"), to deal
