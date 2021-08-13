@@ -1,4 +1,3 @@
-# README.md from [Rprop/And64InlineHook](https://github.com/Rprop/And64InlineHook)
 
 # And64InlineHook
 
