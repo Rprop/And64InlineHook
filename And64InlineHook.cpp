@@ -202,7 +202,7 @@ static bool __fix_cond_comp_test_branch(instruction inpp, instruction outpp, con
     } //if
 
     intptr_t current_idx  = ctxp->get_and_set_current_index(*inpp, *outpp);
-    int64_t absolute_addr = reinterpret_cast<int64_t>(*inpp) + SIGN_EXTEND64((ins & ~lmask) >> (lsb - 2u), 19);
+    int64_t absolute_addr = reinterpret_cast<int64_t>(*inpp) + SIGN_EXTEND64((ins & ~lmask) >> (lsb - 2u), 21);
     int64_t new_pc_offset = static_cast<int64_t>(absolute_addr - reinterpret_cast<int64_t>(*outpp)) >> 2; // shifted
     bool special_fix_type = ctxp->is_in_fixing_range(absolute_addr);
     if (!special_fix_type && llabs(new_pc_offset) >= (~lmask >> (lsb + 1))) {
