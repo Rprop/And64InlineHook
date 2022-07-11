@@ -29,6 +29,8 @@
 #define  __STDC_FORMAT_MACROS
 #include <inttypes.h>
 #include <stdlib.h>
+#include <string.h>
+#include <errno.h>
 #include <sys/mman.h>
 #include <android/log.h>
 
@@ -46,7 +48,7 @@
 # define  A64_LOGI(...)        ((void)0)
 #endif // NDEBUG
 typedef uint32_t *__restrict *__restrict instruction;
-typedef struct
+struct context
 {
     struct fix_info
     {
@@ -101,7 +103,26 @@ public:
             f.bp = NULL;
         }
     }
-} context;
+};
+
+//-------------------------------------------------------------------------
+
+#define __intval(p)                reinterpret_cast<intptr_t>(p)
+#define __uintval(p)               reinterpret_cast<uintptr_t>(p)
+#define __ptr(p)                   reinterpret_cast<void *>(p)
+#define __page_size                4096
+#define __page_align(n)            __align_up(static_cast<uintptr_t>(n), __page_size)
+#define __ptr_align(x)             __ptr(__align_down(reinterpret_cast<uintptr_t>(x), __page_size))
+#define __align_up(x, n)           (((x) + ((n) - 1)) & ~((n) - 1))
+#define __align_down(x, n)         ((x) & -(n))
+#define __countof(x)               static_cast<intptr_t>(sizeof(x) / sizeof((x)[0])) // must be signed
+#define __atomic_increase(p)       __sync_add_and_fetch(p, 1)
+#define __sync_cmpswap(p, v, n)    __sync_bool_compare_and_swap(p, v, n)
+#define __predict_true(exp)        __builtin_expect((exp) != 0, 1)
+#define __flush_cache(c, n)        __builtin___clear_cache(reinterpret_cast<char *>(c), reinterpret_cast<char *>(c) + n)
+#define __make_rwx(p, n)           ::mprotect(__ptr_align(p), \
+                                              __page_align(__uintval(p) + n) != __page_align(__uintval(p)) ? __page_align(n) + __page_size : __page_align(n), \
+                                              PROT_READ | PROT_WRITE | PROT_EXEC)
 
 //-------------------------------------------------------------------------
 
@@ -197,8 +218,9 @@ static bool __fix_cond_comp_test_branch(instruction inpp, instruction outpp, con
         } //if
     } //if
 
+    const uint32_t msb    = __builtin_clz(~lmask);
     intptr_t current_idx  = ctxp->get_and_set_current_index(*inpp, *outpp);
-    int64_t absolute_addr = reinterpret_cast<int64_t>(*inpp) + ((ins & ~lmask) >> (lsb - 2u));
+    int64_t absolute_addr = reinterpret_cast<int64_t>(*inpp) + (static_cast<int32_t>((ins & ~lmask) << msb) >> (lsb - 2u + msb));
     int64_t new_pc_offset = static_cast<int64_t>(absolute_addr - reinterpret_cast<int64_t>(*outpp)) >> 2; // shifted
     bool special_fix_type = ctxp->is_in_fixing_range(absolute_addr);
     if (!special_fix_type && llabs(new_pc_offset) >= (~lmask >> (lsb + 1))) {
@@ -456,28 +478,7 @@ static void __fix_instructions(uint32_t *__restrict inp, int32_t count, uint32_t
 //-------------------------------------------------------------------------
 
 extern "C" {
-#define __attribute                __attribute__
-#define aligned(x)                 __aligned__(x)
-#define __intval(p)                reinterpret_cast<intptr_t>(p)
-#define __uintval(p)               reinterpret_cast<uintptr_t>(p)
-#define __ptr(p)                   reinterpret_cast<void *>(p)
-#define __page_size                4096
-#define __page_align(n)            __align_up(static_cast<uintptr_t>(n), __page_size)
-#define __ptr_align(x)             __ptr(__align_down(reinterpret_cast<uintptr_t>(x), __page_size))
-#define __align_up(x, n)           (((x) + ((n) - 1)) & ~((n) - 1))
-#define __align_down(x, n)         ((x) & -(n))
-#define __countof(x)               static_cast<intptr_t>(sizeof(x) / sizeof((x)[0])) // must be signed
-#define __atomic_increase(p)       __sync_add_and_fetch(p, 1)
-#define __sync_cmpswap(p, v, n)    __sync_bool_compare_and_swap(p, v, n)
-#define __predict_true(exp)        __builtin_expect((exp) != 0, 1)
-#define __flush_cache(c, n)        __builtin___clear_cache(reinterpret_cast<char *>(c), reinterpret_cast<char *>(c) + n)
-#define __make_rwx(p, n)           ::mprotect(__ptr_align(p), \
-                                              __page_align(__uintval(p) + n) != __page_align(__uintval(p)) ? __page_align(n) + __page_size : __page_align(n), \
-                                              PROT_READ | PROT_WRITE | PROT_EXEC)
-
-    //-------------------------------------------------------------------------
-
-    static __attribute((aligned(__page_size))) uint32_t __insns_pool[A64_MAX_BACKUPS][A64_MAX_INSTRUCTIONS * 10];
+    static __attribute__((__aligned__(__page_size))) uint32_t __insns_pool[A64_MAX_BACKUPS][A64_MAX_INSTRUCTIONS * 10];
 
     //-------------------------------------------------------------------------
 
@@ -523,7 +524,7 @@ extern "C" {
             int32_t count = (reinterpret_cast<uint64_t>(original + 2) & 7u) != 0u ? 5 : 4;
             if (trampoline) {
                 if (rwx_size < count * 10u) {
-                    LOGW("rwx size is too small to hold %u bytes backup instructions!", count * 10u);
+                    A64_LOGE("rwx size is too small to hold %u bytes backup instructions!", count * 10u);
                     return NULL;
                 } //if
                 __fix_instructions(original, count, trampoline);
@@ -549,7 +550,7 @@ extern "C" {
         } else {
             if (trampoline) {
                 if (rwx_size < 1u * 10u) {
-                    LOGW("rwx size is too small to hold %u bytes backup instructions!", 1u * 10u);
+                    A64_LOGE("rwx size is too small to hold %u bytes backup instructions!", 1u * 10u);
                     return NULL;
                 } //if
                 __fix_instructions(original, 1, trampoline);
@@ -581,10 +582,10 @@ extern "C" {
             *result = trampoline;
             if (trampoline == NULL) return;
         } //if
-        
-        //fix Android 10 .text segment is read-only by default
+
+        // fix Android 10 .text segment is read-only by default
         __make_rwx(symbol, 5 * sizeof(size_t));
-        
+
         trampoline = A64HookFunctionV(symbol, replace, trampoline, A64_MAX_INSTRUCTIONS * 10u);
         if (trampoline == NULL && result != NULL) {
             *result = NULL;
